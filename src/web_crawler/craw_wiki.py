@@ -62,7 +62,6 @@ def crawl_wikipedia(page_title: str):
         'Accept': "text/html,application/xhtml+xml,application/xml;",
         'Referer': "https://vi.wikipedia.org"
     }
-
     response = requests.get(
         f'https://vi.wikipedia.org/wiki/{page_title}', 
         headers=headers,
