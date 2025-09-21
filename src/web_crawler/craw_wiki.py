@@ -131,7 +131,7 @@ for title in PAGE_TITLES:
         logging.error(f"Error crawling {title}: {e}")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = os.path.join(PROJECT_ROOT, "data", "raw")
+DATA_DIR = os.path.join(PROJECT_ROOT, "data", "raw", "wiki")
 os.makedirs(DATA_DIR, exist_ok=True)
 output_file = os.path.join(DATA_DIR, "wiki_demo.json")
 with open(output_file, "w", encoding="utf-8") as f:
