@@ -62,7 +62,6 @@ def craw_news(url: str):
         junk.decompose()
     
     title = soup.find("h1", class_="detail-title").get_text()
-    print(title)
 
     data = {"title": title, "sections": []}
 
