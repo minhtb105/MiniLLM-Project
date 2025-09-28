@@ -3,6 +3,7 @@ import re
 import os
 import json
 import logging
+import argparse
 import requests
 from bs4 import BeautifulSoup, Tag
 from pathlib import Path
@@ -39,6 +40,7 @@ IGNORE_HEADERS = [
     "Xem thêm",
     "Tham khảo",
     "Liên kết ngoài",
+    "Các liên kết ngoài",
     "Chú thích",
     "Cước chú",
     "Sách",
@@ -78,26 +80,43 @@ def crawl_wikipedia(page_title: str):
     data = {"title": title, "sections": []}
     data["intro"] = extract_intro_text(soup)
 
+    has_header = False
+    default_section = {"header": "Nội dung chính", "content": ""}
     current_section = None
+    
     for tag in soup.select("h2, h3, p, ul, ol"):
         if tag.name in ["h2", "h3"]:
+            has_header = True
             header_text = tag.get_text(" ", strip=True)
             current_section = {"header": header_text, "content": ""}
             data["sections"].append(current_section)
-        elif current_section is not None:
+        elif tag.name == "p":
             # paragraphs
-            if tag.name == "p":
+            if tag.find("b") and tag.contents[0].name == "b":
+                header_text = tag.find("b").get_text(" ", strip=True)
+                current_section = {"header": header_text, "content": ""}
+                data["sections"].append(current_section)
+            else:
                 text = tag.get_text(" ", strip=True)
                 if text:
-                    current_section["content"] += text + " "
-
+                    if current_section is not None:
+                        current_section["content"] += text + "\n"
+                    else:
+                        default_section["content"] += text + "\n"
+        elif tag.name in ["ul", "ol"]:
             # lists
-            elif tag.name in ["ul", "ol"]:
-                items = [li.get_text(" ", strip=True) for li in tag.find_all("li")]
-                if items:
-                    list_text = "; ".join(items)
-                    current_section["content"] += list_text + " "
-                    
+            items = [li.get_text(" ", strip=True) for li in tag.find_all("li")]
+            if items:
+                list_text = "\n".join(items)
+                
+                if has_header:
+                    current_section["content"] += list_text + "\n"
+                else:
+                    default_section["content"] += list_text + "\n"
+                  
+    if not has_header and default_section["content"].strip():
+        data["sections"].append(default_section)
+          
     sections = [
         sec for sec in data["sections"]
         if (sec["content"].strip() and sec["header"] not in IGNORE_HEADERS)
@@ -134,7 +153,16 @@ if __name__ == "__main__":
         "Robot",
         "Mạng_nơ-ron_nhân_tạo",
         "Học_tăng_cường",
-        "ChatGPT"
+        "ChatGPT",
+        "Khoa_học_máy_tính",
+        "Thuật_toán",
+        "Dữ_liệu_lớn",
+        "Khai_phá_dữ_liệu",
+        "Nhận_dạng_giọng_nói",
+        "Xử_lý_hình_ảnh",
+        "Xử_lý_tín_hiệu_số",
+        "Siêu_máy_tính",
+        "Điện_toán_đám_mây"
     ]
     
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -143,7 +171,7 @@ if __name__ == "__main__":
     os.makedirs(DATA_DIR, exist_ok=True)
     
     parser = argparse.ArgumentParser(description="Crawl Wikipedia pages")
-    parser.add_argument("--titles", nargs="+", required=True, help="List of Wikipedia page titles")
+    parser.add_argument("--titles", nargs="+", default=PAGE_TITLES, help="List of Wikipedia page titles")
     parser.add_argument("--output", type=str, default=output_file, help="Output JSON file")
     parser.add_argument("--sleep", type=int, default=1, help="Sleep between requests (seconds)")
     args = parser.parse_args()
