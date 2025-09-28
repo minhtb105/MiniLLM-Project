@@ -111,9 +111,14 @@ def crawl_all_news(
     return all_data
 
 def main():
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    DATA_DIR = os.path.join(PROJECT_ROOT, "data", "raw", "news")
+    output_path = os.path.join(DATA_DIR, "nesw.json")
+    os.makedirs(DATA_DIR, exist_ok=True)
+    
     parser = argparse.ArgumentParser(description="Crawl news articles")
     parser.add_argument("--limit", type=int, default=10, help="Number of articles per category")
-    parser.add_argument("--output", type=str, default="data/raw/news/news_data.json", help="Output JSON file")
+    parser.add_argument("--output", type=str, default=output_path, help="Output JSON file")
     parser.add_argument("--sleep", type=float, default=1.0, help="Sleep time between requests (seconds)")
 
     args = parser.parse_args()
