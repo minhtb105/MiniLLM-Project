@@ -106,34 +106,46 @@ def crawl_wikipedia(page_title: str):
 
     return data
 
-PAGE_TITLES = [
-    "Trí_tuệ_nhân_tạo",
-    "Máy_học",
-    "Học_sâu",
-    "Xử_lý_ngôn_ngữ_tự_nhiên",
-    "Thị_giác_máy_tính",
-    "Khoa_học_dữ_liệu",
-    "Robot",
-    "Mạng_nơ-ron_nhân_tạo",
-    "Học_tăng_cường",
-    "ChatGPT"
-]
-results = []
+def crawl_wiki_pages(titles, output_file, sleep=1):
+    results = []
+    for title in titles:
+        try:
+            data = crawl_wikipedia(title)
+            results.append(data)
+            logging.info(f"Crawled: {title}")
+            time.sleep(sleep)
+        except Exception as e:
+            logging.error(f"Error crawling {title}: {e}")
 
-for title in PAGE_TITLES:
-    try:
-        data = crawl_wikipedia(title)
-        results.append(data)
-        logging.info(f"Crawled: {title}")
-        time.sleep(1)  
-    except Exception as e:
-        logging.error(f"Error crawling {title}: {e}")
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = os.path.join(PROJECT_ROOT, "data", "raw", "wiki")
-os.makedirs(DATA_DIR, exist_ok=True)
-output_file = os.path.join(DATA_DIR, "wiki_demo.json")
-with open(output_file, "w", encoding="utf-8") as f:
-    json.dump(results, f, ensure_ascii=False, indent=2)
+    logging.info(f"Done! Saved {len(results)} pages to {output_file}")
 
-logging.info(f"Done! Saved {len(results)} pages to {output_file}")
+if __name__ == "__main__":
+    PAGE_TITLES = [
+        "Trí_tuệ_nhân_tạo",
+        "Máy_học",
+        "Học_sâu",
+        "Xử_lý_ngôn_ngữ_tự_nhiên",
+        "Thị_giác_máy_tính",
+        "Khoa_học_dữ_liệu",
+        "Robot",
+        "Mạng_nơ-ron_nhân_tạo",
+        "Học_tăng_cường",
+        "ChatGPT"
+    ]
+    
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    DATA_DIR = os.path.join(PROJECT_ROOT, "data", "raw", "wiki")
+    output_file = os.path.join(DATA_DIR, "wiki_demo.json")
+    os.makedirs(DATA_DIR, exist_ok=True)
+    
+    parser = argparse.ArgumentParser(description="Crawl Wikipedia pages")
+    parser.add_argument("--titles", nargs="+", required=True, help="List of Wikipedia page titles")
+    parser.add_argument("--output", type=str, default=output_file, help="Output JSON file")
+    parser.add_argument("--sleep", type=int, default=1, help="Sleep between requests (seconds)")
+    args = parser.parse_args()
+
+    crawl_wiki_pages(args.titles, args.output, sleep=args.sleep)
