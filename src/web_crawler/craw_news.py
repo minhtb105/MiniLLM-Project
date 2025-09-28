@@ -86,6 +86,30 @@ def craw_news(url: str):
 
     return data
 
+def crawl_all_news(
+    category_urls,
+    limit=10,
+    output_path="data/raw/news/news_data.json",
+    sleep_time=1
+):
+    all_data = []
+    for cat in category_urls:
+        article_urls = get_article_urls(cat, limit=limit)
+        for url in article_urls:
+            try:
+                data = craw_news(url)
+                if data and data.get("sections"):
+                    all_data.append(data)
+                time.sleep(sleep_time)
+            except Exception as e:
+                logging.error(f"Error crawling {url}: {e}")
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(all_data, f, ensure_ascii=False, indent=2)
+    
+    return all_data
+
 if __name__ == "__main__":
     category_urls = [
         "https://congdankhuyenhoc.vn/theo-dong-su-kien.htm",
@@ -97,21 +121,9 @@ if __name__ == "__main__":
         "https://congdankhuyenhoc.vn/goc-nhin-cong-dan.htm",
     ]
     
-    all_data = []
-    for cat in category_urls:
-        article_urls = get_article_urls(cat, limit=10)
-        for url in article_urls:
-            try:
-                data = craw_news(url)
-                if data and data.get("sections"):
-                    all_data.append(data)
-                time.sleep(1) 
-            except Exception as e:
-                logging.error(f"Error crawling {url}: {e}")
-
+    
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
     DATA_DIR = os.path.join(PROJECT_ROOT, "data", "raw", "news")
     os.makedirs(DATA_DIR, exist_ok=True)
 
-    with open(os.path.join(DATA_DIR, "news_data.json"), "w", encoding="utf-8") as f:
-        json.dump(all_data, f, ensure_ascii=False, indent=2)
+    crawl_all_news(category_urls, limit=10, output_path=DATA_DIR)
