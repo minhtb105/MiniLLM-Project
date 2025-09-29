@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 import subprocess
+import argparse
 import logging
 from github import Auth, Github, RateLimitExceededException, GithubException
 
@@ -38,16 +39,34 @@ def safe_clone(repo_url: str, target_dir: str) -> bool:
     except subprocess.CalledProcessError as e:
         logging.error(f"[ERROR] cloning {repo_url}: {e}")
         return False
+
+def parse_args():
+    global MAX_REPOS
+    parser = argparse.ArgumentParser(description="Clone GitHub repos by topics")
+    parser.add_argument("--topics", nargs="+", help="List of topics to filter (e.g., machine-learning nlp mlops)")
+    parser.add_argument("--limit", type=int, default=MAX_REPOS, help="Max number of repos to clone")
+    parser.add_argument("--stars", type=int, default=500, help="Min stars threshold")
+    parser.add_argument("--language", type=str, default="Python", help="Programming language filter")
+    parser.add_argument("--license", type=str, default="mit", help="MIT license is required")
+    
+    return parser.parse_args()
+
+def build_query(args):
+    topic_query = " OR ".join([f"topic: {t}" for t in args.topics]) if args.topics else ""
+    q = f"{topic_query} language:{args.language} stars:>={args.stars} license:{args.license}"
+    
+    return q
         
 def clone_repos():
     global cloned_count, MAX_REPOS
-    query = f"language:Python stars:>=1000 license:mit"
+    args = parse_args()
+    query = build_query(args)
     repos = gh.search_repositories(query=query, sort="stars", order="desc")
     
     logging.info(f"Found ~{repos.totalCount} repos")
     
     for repo in repos:
-        if cloned_count >= MAX_REPOS:
+        if cloned_count >= args.limit:
             logging.info(f"Reached max repos limit: {MAX_REPOS}")
             break
         
@@ -86,5 +105,6 @@ def clone_repos():
             print(f"[ERROR] {repo.full_name}: {e}")
 
 if __name__ == "__main__":
+    query = f"(topic:machine-learning OR topic:nlp OR topic:mlops) language:Python stars:>=500 license:mit"
     clone_repos()
     
