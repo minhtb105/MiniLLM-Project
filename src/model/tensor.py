@@ -177,6 +177,9 @@ class Tensor:
     def sum(self, axis=None, keepdims=False):
         return Sum.apply(self, axis, keepdims)
             
+    def mean(self, axis=None, keepdims=False):
+        return Mean.apply(self, axis, keepdims)
+            
     def __repr__(self):
         return f"Tensor(data={self.data}, grad={self.grad}, requires_grad={self.requires_grad})"
     
@@ -372,6 +375,30 @@ class Sum(Function):
         
         return grad
 
+class Mean(Function):
+    @staticmethod
+    def forward(ctx, a, axis=None, keepdims=False):
+        ctx["a_shape"] = a.shape
+        ctx["axis"] = axis
+        ctx["keepdims"] = keepdims
+
+        return np.mean(a, axis=axis, keepdims=keepdims)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        a_shape = ctx["a_shape"]
+        axis = ctx["axis"]
+        keepdims = ctx["keepdims"]
+
+        if not keepdims and axis is not None:
+            grad_output = np.expand_dims(grad_output, axis)
+
+        # Gradient of mean = 1/N for each element
+        scale = np.prod(a_shape) / np.prod(grad_output.shape)
+        grad = np.ones(a_shape, dtype=np.float32) * (grad_output / scale)
+        
+        return grad
+
 def grad_check(func, inputs, eps=1e-3, tol=1e-2):
     # Ensure no stale grads
     for x in inputs:
@@ -516,4 +543,11 @@ if __name__ == "__main__":
     test_all_grads()
     
     test_broadcast_grad()
+    
+    x = Tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
+    y = x.mean()
+    y.backward()
+
+    print("x.grad =")
+    print(x.grad)
     
