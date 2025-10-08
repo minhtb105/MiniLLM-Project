@@ -28,15 +28,16 @@ class Module:
         Returns a list of Tensors with requires_grad=True.
         """
         params = []
-        for name, p in self._parameters.items():
-            if p.requires_grad:
-                params.append(p)
-            
-        for m in self._modules.values():
-            params.extend(m.parameters())
-            
+        for name, param in self._parameters.items():
+            if param is not None:
+                params.append((name, param))
+                
+        for name, module in self._modules.items():
+            for sub_name, sub_param in module.parameters():
+                params.append((f"{name}.{sub_name}", sub_param))
+                
         return params
-
+    
     def named_parameters(self, prefix=""):
         """
         Iterate over all parameters with their names (for saving state_dict).
@@ -79,3 +80,10 @@ class Module:
         self.load_state_dict(state)
         logging.info(f"Loaded model weights from {path}")
         
+    def __setattr__(self, name, value):
+        # Override __setattr__ to automatically register submodules
+        if isinstance(value, Module):
+            self.add_module(name, value)
+        else:
+            object.__setattr__(self, name, value)
+            
