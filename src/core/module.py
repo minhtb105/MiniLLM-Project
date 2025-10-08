@@ -1,6 +1,6 @@
 import logging
 import numpy as np
-from tensor import Tensor
+from src.core.tensor import Tensor
 
 
 class Module:
