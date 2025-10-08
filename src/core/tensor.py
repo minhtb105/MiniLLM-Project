@@ -146,6 +146,17 @@ class Tensor:
     def __neg__(self):
         return Neg.apply(self)
     
+    def pow(self, exponent):
+        """
+        Element-wise power: self ** exponent
+        """
+        exponent = self._wrap(exponent)
+        return Pow.apply(self, exponent)
+    
+    def _rpow__(self, exponent):
+        exponent = self._wrap(exponent)
+        return Pow.apply(exponent, self)
+        
     def tanh(self):
         return Tanh.apply(self)
 
@@ -173,6 +184,9 @@ class Tensor:
     
     def relu(self):
         return ReLU.apply(self)
+    
+    def relu(self):
+        return GELU.apply(self)
     
     def sum(self, axis=None, keepdims=False):
         return Sum.apply(self, axis, keepdims)
@@ -279,6 +293,30 @@ class Tanh(Function):
     def backward(ctx: dict, grad_output):
         # d(tanh(x))/dx = 1 - tanh^2(x)
         return grad_output * (1 - ctx["out"] ** 2)
+    
+class GELU(Function):
+    @staticmethod
+    def forward(ctx: dict, a):
+        # Approximate GELU: 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
+        c = np.sqrt(2 / np.pi)
+        ctx["a"] = a
+        ctx["c"] = c
+        ctx["inner"] = c * (a + 0.044715 * (a ** 3))
+        ctx["tanh_inner"] = np.tanh(ctx["inner"])
+        out = 0.5 * a * (1 + ctx["tanh_inner"])
+        return out
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        a = ctx["a"]
+        c = ctx["c"]
+        tanh_inner = ctx["tanh_inner"]
+        inner = ctx["inner"]
+        # Derivative of GELU approximation
+        left = 0.5 * (1 + tanh_inner)
+        right = 0.5 * a * (1 - tanh_inner ** 2) * c * (1 + 3 * 0.044715 * a ** 2)
+        grad = grad_output * (left + right)
+        return grad
     
 class Log(Function):
     @staticmethod
