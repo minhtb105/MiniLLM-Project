@@ -5,4 +5,5 @@ data/processed/*
 src/__pycache__
 src/utils/__pycache__
 src/model/__pycache__
+src/core/__pycache__
 .env
