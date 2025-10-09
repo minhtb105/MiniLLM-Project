@@ -1,10 +1,10 @@
 import numpy as np
-from src.core.tensor import Tensor
 
 
 class Function:
     @classmethod
     def apply(cls, *inputs):
+        from src.core.tensor import Tensor
         ctx = {}    
         raw_inputs = [i.data if isinstance(i, Tensor) else i for i in inputs]
         out_data = cls.forward(ctx, *raw_inputs)
