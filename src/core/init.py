@@ -99,7 +99,7 @@ def xavier_uniform_(shape: Tuple[int, ...]) -> np.ndarray:
         np.ndarray with Xavier-initialized values
     """
     fan_in, fan_out = _fan_in_out(shape)
-    limit = np.sqrt(6 / (fan_in _ fan_out))
+    limit = np.sqrt(6 / (fan_in + fan_out))
     
     return np.random.uniform(-limit, limit, size=shape).astype(np.float32)
 
