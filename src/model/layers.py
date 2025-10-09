@@ -6,40 +6,129 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 from src.core.tensor import Tensor
 from src.core.module import Module
 from src.utils.random_utils import set_seed
+from src.core.init import (
+    xavier_uniform_,
+    xavier_normal_,
+    kaiming_uniform_,
+    kaiming_normal_,
+    normal_,
+    uniform_,
+    zeros_,
+)
+
+
+
+# ==============================================================
+# Utility: Unified parameter initialization
+# ==============================================================
+def _init_param(tensor: Tensor, init: str, gain: float = 1.0):
+    """
+    Initialize a Tensor using the specified initialization method.
+    
+    Parameters
+    ----------
+    tensor : Tensor
+        The tensor to initialize (its `.data` will be replaced in-place).
+    init : str
+        One of ['xavier_uniform', 'xavier_normal', 
+                'kaiming_uniform', 'kaiming_normal',
+                'uniform', 'normal', 'none']
+    gain : float, optional
+        Scaling factor applied to variance (useful for activations like ReLU).
+    """
+    shape = tensor.data.shape
+
+    if init == "xavier_uniform":
+        tensor.data = xavier_uniform_(shape)
+    elif init == "xavier_normal":
+        tensor.data = xavier_normal_(shape)
+    elif init == "kaiming_uniform":
+        tensor.data = kaiming_uniform_(shape)
+    elif init == "kaiming_normal":
+        tensor.data = kaiming_normal_(shape)
+    elif init == "uniform":
+        tensor.data = uniform_(shape)
+    elif init == "normal":
+        tensor.data = normal_(shape)
+    elif init == "ones":
+        tensor.data = np.ones(shape, dtype=np.float32)
+    elif init == "zeros":
+        tensor.data = np.zeros(shape, dtype=np.float32)
+    elif init == "none":
+        pass
+    else:
+        raise ValueError(f"Unknown init method: {init}")
+    return tensor
 
 
 class Linear(Module):
-    def __init__(self, in_dim, out_dim, bias=True):
+    def __init__(self, in_dim: int, out_dim: int, bias: bool = True, init: str = "kaiming_uniform"):
+        """
+        Fully connected linear layer: y = xW + b
+        
+        Parameters
+        ----------
+        in_dim : int
+            Number of input features
+        out_dim : int
+            Number of output features
+        bias : bool
+            Whether to include bias term
+        init : str
+            Initialization method ('xavier_uniform', 'kaiming_normal', etc.)
+        """
         super().__init__()
-        W = Tensor(np.random.randn(in_dim, out_dim) * np.sqrt(2.0 / in_dim), requires_grad=True)
-        self.add_parameter("weight", W)
+        W = Tensor(np.empty((in_dim, out_dim)), requires_grad=True)
+        self.add_parameter("weight", _init_param(W, init))
 
         if bias:
             b = Tensor(np.zeros(out_dim), requires_grad=True)
             self.add_parameter("bias", b)
         else:
             self._parameters["bias"] = None
-            
+
     def __call__(self, x: Tensor):
         y = x.matmul(self._parameters["weight"])
         b = self._parameters["bias"]
-        if b is not None:
-            y = y + b
-            
-        return y
+        
+        return y + b if b is not None else y
         
         
 class LayerNorm(Module):
-    def __init__(self, dim, eps=1e-5):
+    def __init__(self, dim: int, eps: float = 1e-5, init: str = "default"):
+        """
+        Layer Normalization layer.
+
+        Parameters
+        ----------
+        dim : int
+            Number of features per token.
+        eps : float
+            Small constant added for numerical stability.
+        init : str
+            Initialization type for gamma/beta. 
+            If "default", uses gamma=ones, beta=zeros (PyTorch style).
+        """
         super().__init__()
         self.eps = eps
-        self.add_parameter("gamma", Tensor(np.ones(dim), requires_grad=True))
-        self.add_parameter("beta", Tensor(np.zeros(dim), requires_grad=True))
+
+        gamma = Tensor(np.empty(dim), requires_grad=True)
+        beta = Tensor(np.empty(dim), requires_grad=True)
+
+        if init == "default":
+            _init_param(gamma, "ones")
+            _init_param(beta, "zeros")
+        else:
+            _init_param(gamma, init)
+            _init_param(beta, init)
+
+        self.add_parameter("gamma", gamma)
+        self.add_parameter("beta", beta)
 
     def __call__(self, x: Tensor):
         mean = x.mean(axis=-1, keepdims=True)
         var = ((x - mean) ** 2).mean(axis=-1, keepdims=True)
-        norm = (x - mean) / (var + self.eps) ** 0.5
+        norm = (x - mean) / (var + self.eps).sqrt()
         
         return self._parameters["gamma"] * norm + self._parameters["beta"]    
     
@@ -67,38 +156,63 @@ class MLP(Module):
 
 
 class Embedding(Module):
-    def __init__(self, vocab_size: int, d_model: int):
+    def __init__(self, vocab_size: int, d_model: int, init: str = "xavier_normal"):
+        """
+        Word embedding layer mapping token IDs → vectors.
+        """
         super().__init__()
-        self.add_parameter("weight", 
-            Tensor(np.random.randn(vocab_size, d_model) * 0.02, 
-            requires_grad=True))
-        
+        W = Tensor(np.empty((vocab_size, d_model)), requires_grad=True)
+        self.add_parameter("weight", _init_param(W, init))
+
     def __call__(self, token_ids: list[int]):
         return self._parameters["weight"][token_ids]
     
     
 class PositionalEmbedding(Module):
-    def __init__(self, max_len, d_model):
+    def __init__(self, max_len: int, d_model: int, init: str = "normal"):
+        """
+        Learnable positional embeddings added to token embeddings.
+        """
         super().__init__()
-        self.add_parameter("pos_emb",
-            Tensor(np.random.randn(max_len, d_model) * 0.02, 
-            requires_grad=True))
-        
+        P = Tensor(np.empty((max_len, d_model)), requires_grad=True)
+        self.add_parameter("pos_emb", _init_param(P, init))
+
     def __call__(self, x: Tensor):
         L = x.shape[1]
+        
         return x + self._parameters["pos_emb"][:L]
 
 
 # ---------------- RMSNorm (LLaMA/Falcon) ----------------
 class RMSNorm(Module):
-    def __init__(self, dim, eps=1e-8):
+    def __init__(self, dim: int, eps: float = 1e-8, init: str = "default"):
+        """
+        Root Mean Square Normalization (used in LLaMA/Falcon models).
+        
+        Parameters
+        ----------
+        dim : int
+            Hidden dimension.
+        eps : float
+            Stability constant.
+        init : str
+            Initialization method for the weight. Default = ones.
+        """
         super().__init__()
         self.eps = eps
-        self.add_parameter("weight", Tensor(np.ones(dim), requires_grad=True))
+
+        weight = Tensor(np.empty(dim), requires_grad=True)
+        if init == "default":
+            _init_param(weight, "ones")
+        else:
+            _init_param(weight, init)
+
+        self.add_parameter("weight", weight)
 
     def __call__(self, x: Tensor):
-        norm = x / (x.pow(2).mean(axis=-1, keepdims=True) + self.eps).sqrt()
-        return self._parameters["weight"] * norm
+        rms = (x.pow(2).mean(axis=-1, keepdims=True) + self.eps).sqrt()
+        
+        return self._parameters["weight"] * (x / rms)
 
 
 class Dropout(Module):
@@ -180,7 +294,34 @@ def FeedForward(Module):
 
 if __name__ == "__main__":
     set_seed(42)
+    
+    print("\n---- MLP ----")
     mlp = MLP([2, 10, 10, 8])
     for name, param in mlp.parameters():
         print(name)
+    
+    print("---- Linear ----")
+    linear = Linear(4, 6, init="kaiming_uniform")
+    for name, param in linear.parameters():
+        print(name, param.data.shape)
+
+    print("\n---- Embedding ----")
+    emb = Embedding(vocab_size=20, d_model=8, init="xavier_normal")
+    for name, param in emb.parameters():
+        print(name, param.data.shape)
+
+    print("\n---- PositionalEmbedding ----")
+    pos_emb = PositionalEmbedding(max_len=16, d_model=8, init="uniform")
+    for name, param in pos_emb.parameters():
+        print(name, param.data.shape)
+        
+    print("\n---- LayerNorm ----")
+    ln = LayerNorm(8)
+    for n, p in ln.parameters():
+        print("LayerNorm:", n, p.data.shape, p.data.mean())
+
+    print("\n---- RMSNorm ----")
+    rms = RMSNorm(8)
+    for n, p in rms.parameters():
+        print("RMSNorm:", n, p.data.shape, p.data.mean())    
     
