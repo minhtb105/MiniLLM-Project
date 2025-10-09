@@ -6,7 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 from src.utils.random_utils import set_seed
 from src.core.functional import (
     Function, Add, Sub, Neg, Mul, Pow, Div, Tanh, GELU, Log, Sqrt, Exp, 
-    Softmax, Matmul, ReLU, Sum, Mean)
+    Softmax, MatMul, ReLU, Sum, Mean)
 
 
 def unbroadcast(grad, shape):
