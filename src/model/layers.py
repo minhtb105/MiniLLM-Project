@@ -244,32 +244,44 @@ class MultiHeadAttention(Module):
         
         self.dropout = Dropout(0.1)
 
-    def __call__(self, x: Tensor):
+    def __call__(self, x: Tensor, past_key_value=None, use_cache=False):
         batch, seq_len, d_model = x.shape
         n_heads = self.n_heads
         head_dim = self.head_dim
 
         # Project and reshape (batch, seq_len, d_model) -> (batch, n_heads, seq_len, d_model)
-        Q = self.Wq(x).reshape(batch, seq_len, n_heads, head_dim).transpose(0, 2, 1, 3)
-        K = self.Wk(x).reshape(batch, seq_len, n_heads, head_dim).transpose(0, 2, 1, 3)
-        V = self.Wv(x).reshape(batch, seq_len, n_heads, head_dim).transpose(0, 2, 1, 3)
+        Q = self.Wq(x).data.reshape(batch, seq_len, n_heads, head_dim).transpose(0, 2, 1, 3)
+        K = self.Wk(x).data.reshape(batch, seq_len, n_heads, head_dim).transpose(0, 2, 1, 3)
+        V = self.Wv(x).data.reshape(batch, seq_len, n_heads, head_dim).transpose(0, 2, 1, 3)
+
+        # If past_key_value is provided, concatenate
+        if past_key_value is not None:
+            past_k, past_v = past_key_value
+            K = Tensor(np.concatenate([past_k.data, K], axis=2))
+            V = Tensor(np.concatenate([past_v.data, V], axis=2))
+
+        # Save new cache if use_cache
+        new_past = (K, V) if use_cache else None
 
         # Attention score: (batch, n_heads, seq_len, seq_len)
-        scores = (Q.matmul(K.transpose(0,1,3,2))) / np.sqrt(Hd)
+        attn_scores = (Q.matmul(K.transpose(0,1,3,2))) / np.sqrt(head_dim)
 
         if self.causal:
             mask = np.triu(np.ones((L, L)), k=1) * -1e9
-            scores = scores + Tensor(mask[np.newaxis, np.newaxis, :, :])
+            attn_scores = attn_scores + Tensor(mask[np.newaxis, np.newaxis, :, :])
 
-        attn = scores.softmax(axis=-1)
-        attn = self.dropout(attn)
+        attn_probs = attn_scores.softmax(axis=-1)
+        attn_probs = self.dropout(attn_probs)
 
         # Weighted sum: (batch, n_heads, seq_len, head_dim)
-        out = attn.matmul(V)
+        attn_out = attn_probs.matmul(V)
 
-        out = out.transpose(0, 2, 1, 3).reshape(B, L, D)
+        attn_out = attn_out.transpose(0, 2, 1, 3).reshape(B, L, D)
+
+        if use_cache:
+            return self.Wo(attn_out), new_past
         
-        return self.Wo(out)
+        return self.Wo(attn_out)
 
 def FeedForward(Module):
     def __init__(self, dim, hidden_dim, activation="relu", dropout=0.1):
