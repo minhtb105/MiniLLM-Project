@@ -82,6 +82,18 @@ class Tensor:
         self.requires_grad = requires_grad
         self.grad = None
         self.grad_fn = None  # The function that created this tensor (used for backpropagation)
+    
+    @property
+    def shape(self):
+        return self.data.shape
+    
+    @property
+    def ndim(self):
+        return self.data.ndim
+    
+    @property
+    def dtype(self):
+        return self.data.dtype    
         
     def zero_grad(self, recursive=True):
         """
