@@ -256,39 +256,45 @@ class MultiHeadAttention(Module):
         n_heads = self.n_heads
         head_dim = self.head_dim
 
-        # Project and reshape (batch, seq_len, d_model) -> (batch, n_heads, seq_len, d_model)
+        # Project and reshape: (B, L, D) -> (B, H, L, D/H)
         Q = self.Wq(x).data.reshape(batch, seq_len, n_heads, head_dim).transpose(0, 2, 1, 3)
         K = self.Wk(x).data.reshape(batch, seq_len, n_heads, head_dim).transpose(0, 2, 1, 3)
         V = self.Wv(x).data.reshape(batch, seq_len, n_heads, head_dim).transpose(0, 2, 1, 3)
 
-        # If past_key_value is provided, concatenate
+        # Concatenate past key/values if available
         if past_key_value is not None:
             past_k, past_v = past_key_value
-            K = Tensor(np.concatenate([past_k.data, K], axis=2))
-            V = Tensor(np.concatenate([past_v.data, V], axis=2))
+            K = np.concatenate([past_k.data, K], axis=2)
+            V = np.concatenate([past_v.data, V], axis=2)
 
-        # Save new cache if use_cache
-        new_past = (K, V) if use_cache else None
+        # Save cache for next step if needed
+        new_past = (Tensor(K), Tensor(V)) if use_cache else None
 
-        # Attention score: (batch, n_heads, seq_len, seq_len)
-        attn_scores = (Q.matmul(K.transpose(0,1,3,2))) / np.sqrt(head_dim)
+        # Compute scaled dot-product attention
+        attn_scores = np.matmul(Q, np.transpose(K, (0, 1, 3, 2))) / np.sqrt(head_dim)
 
+        # causal mask in pure NumPy (avoid Tensor allocation)
         if self.causal:
-            mask = np.triu(np.ones((L, L)), k=1) * -1e9
-            attn_scores = attn_scores + Tensor(mask[np.newaxis, np.newaxis, :, :])
+            # Mask out future tokens with -inf
+            causal_mask = np.triu(np.ones((seq_len, seq_len), dtype=bool), k=1)
+            attn_scores = np.where(causal_mask, -1e9, attn_scores)
 
-        attn_probs = attn_scores.softmax(axis=-1)
-        attn_probs = self.dropout(attn_probs)
+        # Softmax + dropout
+        attn_probs = np.exp(attn_scores - attn_scores.max(axis=-1, keepdims=True))
+        attn_probs /= attn_probs.sum(axis=-1, keepdims=True)
+        attn_probs = self.dropout(Tensor(attn_probs)).data  # dropout works on Tensor
 
-        # Weighted sum: (batch, n_heads, seq_len, head_dim)
-        attn_out = attn_probs.matmul(V)
+        # Weighted sum
+        attn_out = np.matmul(attn_probs, V)
 
+        # Recombine heads: (B, H, L, D/H) -> (B, L, D)
         attn_out = attn_out.transpose(0, 2, 1, 3).reshape(batch, seq_len, d_model)
 
-        if use_cache:
-            return self.Wo(attn_out), new_past
-        
-        return self.Wo(attn_out)
+        # Output projection
+        out = self.Wo(Tensor(attn_out))
+
+    return (out, new_past) if use_cache else out
+
 
 class FeedForward(Module):
     def __init__(self, dim, hidden_dim, activation="relu", dropout=0.1):
