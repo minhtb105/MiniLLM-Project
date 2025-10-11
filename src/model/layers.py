@@ -283,7 +283,7 @@ class MultiHeadAttention(Module):
         
         return self.Wo(attn_out)
 
-def FeedForward(Module):
+class FeedForward(Module):
     def __init__(self, dim, hidden_dim, activation="relu", dropout=0.1):
         super().__init__()
         hidden_dim = hidden_dim or 4 * dim
