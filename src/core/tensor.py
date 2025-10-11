@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Union, List, Tuple
 import os, sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -34,9 +35,37 @@ def unbroadcast(grad, shape):
         
     return grad
 
+ArrayLike = Union[np.ndarray, List[float], Tuple[float, ...], float, int]
 class Tensor:
-    def __init__(self, data, requires_grad: bool=False):
-        self.data = np.array(data, dtype=np.float32)
+    def __init__(self, data: ArrayLike, requires_grad: bool=False):
+        # --- None check
+        if data is None:
+            raise ValueError("Tensor data cannot be None")
+
+        # --- Normalize input to numpy array (float32)
+        if isinstance(data, np.ndarray):
+            # Clone to avoid sharing reference
+            arr = data.astype(np.float32, copy=True)
+        elif isinstance(data, (list, tuple)):
+            # Convert list/tuple to array
+            arr = np.array(data, dtype=np.float32)
+        elif isinstance(data, (float, int)):
+            # Wrap scalar into 0D array
+            arr = np.array(data, dtype=np.float32)
+        else:
+            raise TypeError(
+                f"Unsupported data type for Tensor: {type(data)}. "
+                f"Expected one of (np.ndarray, list, tuple, float, int)."
+            )
+
+        # --- Sanity check: ensure finite values
+        if not np.isfinite(arr).all():
+            raise ValueError(
+                f"Tensor contains NaN or Inf values. "
+                f"min={arr.min()}, max={arr.max()}"
+            )
+            
+        self.data = arr
         self.requires_grad = requires_grad
         self.grad = None
         self.grad_fn = None  # The function that created this tensor (used for backpropagation)
