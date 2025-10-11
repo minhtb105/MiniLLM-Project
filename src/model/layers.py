@@ -293,7 +293,7 @@ class MultiHeadAttention(Module):
         # Output projection
         out = self.Wo(Tensor(attn_out))
 
-    return (out, new_past) if use_cache else out
+        return (out, new_past) if use_cache else out
 
 
 class FeedForward(Module):
