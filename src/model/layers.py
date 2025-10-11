@@ -165,7 +165,9 @@ class Embedding(Module):
         self.add_parameter("weight", _init_param(W, init))
 
     def __call__(self, token_ids: list[int]):
-        return self._parameters["weight"].data[token_ids]
+        emb = self._parameters["weight"].data[token_ids]  # numpy indexing
+        
+        return Tensor(emb.astype(np.float32), requires_grad=self._parameters["weight"].requires_grad)
     
     
 class PositionalEmbedding(Module):
@@ -180,10 +182,10 @@ class PositionalEmbedding(Module):
     def __call__(self, x: Tensor):
         # x: Tensor(batch, seq_len, d_model)
         batch, seq_len, d_model = x.data.shape
-        pos = self._parameters["pos_emb"].data[:seq_len]  # (seq_len, d_model)
+        pos = self._parameters["pos_emb"].data[:seq_len].astype(np.float32)  # (seq_len, d_model)
         pos = np.broadcast_to(pos, (batch, seq_len, d_model))
     
-        return Tensor(x.data + pos)
+        return Tensor(x.data + pos, requires_grad=x.requires_grad or self._parameters["pos_emb"].requires_grad)
 
 
 # ---------------- RMSNorm (LLaMA/Falcon) ----------------
@@ -228,7 +230,9 @@ class Dropout(Module):
             return x
         
         mask = (np.random.rand(*x.shape) >= self.p).astype(np.float32) / (1.0 - self.p)
-        return x * mask
+        out = Tensor(x.data * mask, requires_grad=x.requires_grad)
+        
+        return out
 
 
 class MultiHeadAttention(Module):
@@ -279,7 +283,7 @@ class MultiHeadAttention(Module):
         # Weighted sum: (batch, n_heads, seq_len, head_dim)
         attn_out = attn_probs.matmul(V)
 
-        attn_out = attn_out.transpose(0, 2, 1, 3).reshape(B, L, D)
+        attn_out = attn_out.transpose(0, 2, 1, 3).reshape(batch, seq_len, d_model)
 
         if use_cache:
             return self.Wo(attn_out), new_past
