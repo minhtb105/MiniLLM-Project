@@ -60,7 +60,6 @@ class CausalLM(Module):
     
     def generate(
         self,
-        model: CausalLM, 
         input_ids: np.ndarray,
         max_new_tokens: int = 50,
         temperature: float = 1.0,
@@ -250,5 +249,5 @@ class GPTModel(CausalLM):
         """
         Generate tokens using Top-p Beam Sampling + Temperature + Repetition Penalty.
         """
-        return super().generate(self, input_ids, max_new_tokens, temperature, top_p, repetition_penalty, num_beams)
+        return super().generate(input_ids, max_new_tokens, temperature, top_p, repetition_penalty, num_beams)
     
