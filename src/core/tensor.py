@@ -104,7 +104,13 @@ class Tensor:
         
     # convenience ops (wrap scalars to Tensor without auto requires_grad)
     def _wrap(self, other):
-        return other if isinstance(other, Tensor) else Tensor(other)
+         # avoid wrapping Tensor inside another Tensor
+        if isinstance(other, Tensor):
+            return other
+        elif isinstance(other, (int, float, np.ndarray, list, tuple)):
+            return Tensor(other)
+        else:
+            raise TypeError(f"Unsupported type for Tensor operation: {type(other)}")
         
     def __add__(self, other):
         other = self._wrap(other)
