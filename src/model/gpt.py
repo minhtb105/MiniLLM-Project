@@ -173,10 +173,8 @@ class GPTModel(CausalLM):
     
         # Embedding layers
         self.token_emb = Embedding(vocab_size, d_model, init="xavier_normal")
-        self.add_module("token_emb", self.token_emb)
         
         self.pos_emb = PositionalEmbedding(max_seq_len, d_model)
-        self.add_module("pos_emb", self.pos_emb)
       
         # Transformer blocks
         self.blocks: List[TransformerBlock] = []
@@ -190,12 +188,10 @@ class GPTModel(CausalLM):
             self.ln_f = RMSNorm(d_model)
         else:
             self.ln_f = LayerNorm(d_model)
-        self.add_module("ln_f", self.ln_f)
             
         # Output projection (lm head)
         # If tying embeddings, we use token_emb.weight.T as projection weight at forward-time.
         self.lm_head = Linear(d_model, vocab_size, bias=False, init="normal")
-        self.add_module("lm_head", self.lm_head)
 
         self.tie_word_embeddings = tie_word_embeddings
         if tie_word_embeddings:
