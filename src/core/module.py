@@ -81,9 +81,13 @@ class Module:
         logging.info(f"Loaded model weights from {path}")
         
     def __setattr__(self, name, value):
-        # Override __setattr__ to automatically register submodules
+        # Automatically register submodules AND keep attribute access working.
+        # This avoids AttributeError when code expects self.some_submodule.
         if isinstance(value, Module):
+            # register in dict of modules
             self.add_module(name, value)
+            # also set as attribute so attribute access (self.name) works
+            object.__setattr__(self, name, value)
         else:
             object.__setattr__(self, name, value)
             
