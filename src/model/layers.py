@@ -78,7 +78,7 @@ class Linear(Module):
             Initialization method ('xavier_uniform', 'kaiming_normal', etc.)
         """
         super().__init__()
-        W = Tensor(np.empty((in_dim, out_dim)), requires_grad=True)
+        W = Tensor(np.zeros((in_dim, out_dim)), requires_grad=True)
         self.add_parameter("weight", _init_param(W, init))
 
         if bias:
@@ -112,8 +112,8 @@ class LayerNorm(Module):
         super().__init__()
         self.eps = eps
 
-        gamma = Tensor(np.empty(dim), requires_grad=True)
-        beta = Tensor(np.empty(dim), requires_grad=True)
+        gamma = Tensor(np.zeros(dim), requires_grad=True)
+        beta = Tensor(np.zeros(dim), requires_grad=True)
 
         if init == "default":
             _init_param(gamma, "ones")
@@ -161,7 +161,7 @@ class Embedding(Module):
         Word embedding layer mapping token IDs → vectors.
         """
         super().__init__()
-        W = Tensor(np.empty((vocab_size, d_model)), requires_grad=True)
+        W = Tensor(np.zeros((vocab_size, d_model)), requires_grad=True)
         self.add_parameter("weight", _init_param(W, init))
 
     def __call__(self, token_ids: list[int]):
@@ -174,7 +174,7 @@ class PositionalEmbedding(Module):
         Learnable positional embeddings added to token embeddings.
         """
         super().__init__()
-        P = Tensor(np.empty((max_len, d_model)), requires_grad=True)
+        P = Tensor(np.zeros((max_len, d_model)), requires_grad=True)
         self.add_parameter("pos_emb", _init_param(P, init))
 
     def __call__(self, x: Tensor):
@@ -201,7 +201,7 @@ class RMSNorm(Module):
         super().__init__()
         self.eps = eps
 
-        weight = Tensor(np.empty(dim), requires_grad=True)
+        weight = Tensor(np.zeros(dim), requires_grad=True)
         if init == "default":
             _init_param(weight, "ones")
         else:
