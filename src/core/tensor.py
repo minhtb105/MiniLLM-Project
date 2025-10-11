@@ -44,8 +44,21 @@ class Tensor:
 
         # --- Normalize input to numpy array (float32)
         if isinstance(data, np.ndarray):
-            # Clone to avoid sharing reference
-            arr = data.astype(np.float32, copy=True)
+            # Handle object dtype arrays (ragged or arrays of Tensor)
+            if data.dtype == np.object_:
+                # Try to coerce each element to a numeric array and stack
+                try:
+                    elems = [np.asarray(x, dtype=np.float32) for x in data.reshape(-1)]
+                    arr = np.stack(elems, axis=0).reshape((*data.shape, elems[0].shape[-1]) if elems[0].ndim>0 else (*data.shape,))
+                except Exception as e:
+                    # fallback: try simple astype (may raise the same ValueError)
+                    raise TypeError(
+                        "Cannot convert object-dtype ndarray to numeric ndarray in Tensor.__init__. "
+                        "Make sure you are not creating ndarray from list-of-Tensor or ragged lists."
+                    ) from e
+            else:
+                # normal numeric array
+                arr = data.astype(np.float32, copy=True)
         elif isinstance(data, (list, tuple)):
             # Convert list/tuple to array
             arr = np.array(data, dtype=np.float32)
@@ -236,7 +249,24 @@ class Tensor:
         return f"Tensor(data={self.data}, grad={self.grad}, requires_grad={self.requires_grad})"
 
     def __getitem__(self, idx):
-        return Tensor(self.data[idx], requires_grad=self.requires_grad)
+        result = self.data[idx]
+        
+        if isinstance(result, Tensor):
+            result = result.data
+            
+        # If result is numpy object array, try to convert to float32 array
+        if isinstance(result, np.ndarray) and result.dtype == np.object_:
+            try:
+                elems = [np.asarray(x, dtype=np.float32) for x in result.reshape(-1)]
+                result = np.stack(elems, axis=0).reshape(
+                    (*result.shape, elems[0].shape[-1]) if elems[0].ndim > 0 else (*result.shape,)
+                )
+            except Exception as e:
+                raise TypeError(
+                    f"Cannot convert object-dtype slice to numeric ndarray in Tensor.__getitem__: {e}"
+                ) from e
+
+        return Tensor(result, requires_grad=self.requires_grad)
 
 def grad_check(func, inputs, eps=1e-3, tol=1e-2):
     # Ensure no stale grads
