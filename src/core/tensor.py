@@ -200,6 +200,8 @@ class Tensor:
     def __repr__(self):
         return f"Tensor(data={self.data}, grad={self.grad}, requires_grad={self.requires_grad})"
 
+    def __getitem__(self, idx):
+        return Tensor(self.data[idx], requires_grad=self.requires_grad)
 
 def grad_check(func, inputs, eps=1e-3, tol=1e-2):
     # Ensure no stale grads
