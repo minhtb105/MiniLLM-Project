@@ -178,7 +178,7 @@ class PositionalEmbedding(Module):
         self.add_parameter("pos_emb", _init_param(P, init))
 
     def __call__(self, x: Tensor):
-        L = x.shape[1]
+        L = x.data.shape[1]
         
         return x + self._parameters["pos_emb"][:L]
 
@@ -319,11 +319,23 @@ if __name__ == "__main__":
 
     print("\n---- Embedding ----")
     emb = Embedding(vocab_size=20, d_model=8, init="xavier_normal")
+    token_ids = [1, 5, 10, 15]
+    token_embeddings = emb(token_ids)
+    print("token_embedding type: ", type(token_embeddings))
+    print("token_embeddings shape:", token_embeddings.data.shape)
+    print("Embedding weight.data type:", type(emb._parameters["weight"].data))
+    print("Result type:", type(emb._parameters["weight"].data[token_ids]))
     for name, param in emb.parameters():
         print(name, param.data.shape)
 
     print("\n---- PositionalEmbedding ----")
     pos_emb = PositionalEmbedding(max_len=16, d_model=8, init="uniform")
+    x = Tensor(np.zeros((2, 10, 8)))  # (batch, seq_len, d_model)
+    out = pos_emb(x)
+    print("Positional Embedding output type:", type(out))
+    print("Positional Embedding output shape:", out.data.shape)
+    print("Positional Embedding weight.data type:", type(pos_emb._parameters["pos_emb"].data))
+    print("Result type:", type(pos_emb._parameters["pos_emb"].data[:10]))
     for name, param in pos_emb.parameters():
         print(name, param.data.shape)
         
