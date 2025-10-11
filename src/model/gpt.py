@@ -30,13 +30,6 @@ class TransformerBlock(Module):
         self.ffn = FeedForward(d_model, d_model * mlp_ratio, activation="gelu", dropout=dropout)
         self.dropout = Dropout(dropout)
 
-        # Register submodules
-        self.add_module("ln1", self.ln1)
-        self.add_module("attn", self.attn)
-        self.add_module("ln2", self.ln2)
-        self.add_module("ffn", self.ffn)
-        self.add_module("dropout", self.dropout)
-
     def __call__(self, x: Tensor, past_key_value=None, use_cache=False):
         # x: (B, L, D)
         # Attention block (pre-LN)
