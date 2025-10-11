@@ -173,7 +173,6 @@ class GPTModel(CausalLM):
         self.blocks: List[TransformerBlock] = []
         for i in range(n_layers):
             blk = TransformerBlock(d_model, n_heads, mlp_ratio=mlp_ratio, dropout=dropout, norm_type=norm_type)
-            self.add_module(f"block{i}", blk)
             self.blocks.append(blk)
             
         # Final normalization (pre-head)
@@ -202,7 +201,7 @@ class GPTModel(CausalLM):
             past_key_values (n_layers list of tuples) if use_cache=True
         """
         # Convert input ids to embeddings via model's Embedding (which returns Tensor)
-        x = self.embed_tokens(input_ids) + self.pos_emb(input_ids)  # expects token_ids list/ndarray -> returns Tensor (B,L,D)
+        x = self.token_emb(input_ids) + self.pos_emb(input_ids)  # expects token_ids list/ndarray -> returns Tensor (B,L,D)
         new_past = []
         
         for i, blk in enumerate(self.blocks):
