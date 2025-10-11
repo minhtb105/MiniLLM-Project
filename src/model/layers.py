@@ -165,7 +165,7 @@ class Embedding(Module):
         self.add_parameter("weight", _init_param(W, init))
 
     def __call__(self, token_ids: list[int]):
-        return self._parameters["weight"][token_ids]
+        return self._parameters["weight"].data[token_ids]
     
     
 class PositionalEmbedding(Module):
@@ -178,9 +178,12 @@ class PositionalEmbedding(Module):
         self.add_parameter("pos_emb", _init_param(P, init))
 
     def __call__(self, x: Tensor):
-        L = x.data.shape[1]
-        
-        return x + self._parameters["pos_emb"][:L]
+        # x: Tensor(batch, seq_len, d_model)
+        batch, seq_len, d_model = x.data.shape
+        pos = self._parameters["pos_emb"].data[:seq_len]  # (seq_len, d_model)
+        pos = np.broadcast_to(pos, (batch, seq_len, d_model))
+    
+        return Tensor(x.data + pos)
 
 
 # ---------------- RMSNorm (LLaMA/Falcon) ----------------
