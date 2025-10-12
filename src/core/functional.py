@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 
 
@@ -6,7 +7,7 @@ class Function:
     def apply(cls, *inputs):
         from src.core.tensor import Tensor
         ctx = {}    
-        raw_inputs = [i.data if isinstance(i, Tensor) else i for i in inputs]
+        raw_inputs = [i.data if hasattr(i, "data") else i for i in inputs]
         out_data = cls.forward(ctx, *raw_inputs)
         out = Tensor(out_data)
         out.requires_grad = any(getattr(i, "requires_grad", False) for i in inputs)
