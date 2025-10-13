@@ -5,8 +5,15 @@ import numpy as np
 class Function:
     @classmethod
     def apply(cls, *inputs):
-        from src.core.tensor import Tensor
-        ctx = {}    
+        import sys
+        
+        Tensor = None
+        if "src.core.tensor" in sys.modules:
+            Tensor = sys.modules["src.core.tensor"].Tensor
+        elif "__main__" in sys.modules:
+            Tensor = sys.modules["__main__"].Tensor
+
+        ctx = {}
         raw_inputs = [i.data if hasattr(i, "data") else i for i in inputs]
         out_data = cls.forward(ctx, *raw_inputs)
         out = Tensor(out_data)
