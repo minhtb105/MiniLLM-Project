@@ -8,3 +8,4 @@ src/model/__pycache__
 src/core/__pycache__
 src/data/__pycache__
 .env
+src/minillm_project.egg-info/*
