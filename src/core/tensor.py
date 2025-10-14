@@ -20,20 +20,16 @@ def unbroadcast(grad, shape):
     if shape == ():
         return grad.sum()
     
-    # 1) sum leading axes if grad has more dims than shape
+    # sum leading axes 
     while grad.ndim > len(shape):
         grad = grad.sum(axis=0)
 
-    # 2) for dims where original shape ==1 but grad dim >1, sum along that axis
-    for i, dim in enumerate(shape):
-        if dim == 1 and grad.shape[i] > 1:
+    # sum over broadcasted dims
+    for i in reversed(range(len(shape))):
+        if shape[i] == 1 and grad.shape[i] > 1:
             grad = grad.sum(axis=i, keepdims=True)
-        
-    # Finally, ensure shape equality
-    if grad.shape != tuple(shape):
-        grad = grad.reshape(shape)
-        
-    return grad
+    
+    return grad.reshape(shape)
 
 ArrayLike = Union[np.ndarray, List[float], Tuple[float, ...], float, int]
 class Tensor:
@@ -65,6 +61,9 @@ class Tensor:
         elif isinstance(data, (float, int)):
             # Wrap scalar into 0D array
             arr = np.array(data, dtype=np.float32)
+        elif isinstance(data, np.generic):
+            # Convert numpy scalar (e.g., np.float32) to ndarray
+            arr = np.array(data, dtype=np.float32)  
         else:
             raise TypeError(
                 f"Unsupported data type for Tensor: {type(data)}. "
@@ -134,7 +133,11 @@ class Tensor:
             grad_out = t.grad
             if grad_out is None:
                 grad_out = np.ones_like(t.data)
-                
+            
+            # Compute local gradients of this operation:
+            # grads = (∂L/∂input₁, ∂L/∂input₂, ...)
+            # Each grad is computed by the Function that created this tensor (t.grad_fn).
+            # grad_out = ∂L/∂t, passed from downstream nodes.    
             grads = t.grad_fn.backward(t.grad_fn.ctx, grad_out)
             if not isinstance(grads, (tuple, list)):
                 grads = (grads,) 
@@ -155,6 +158,29 @@ class Tensor:
                     p._build_topo(topo, visited)
                     
             topo.append(self)
+        
+    def transpose(self, axes=None):
+        """
+        Return a new Tensor with permuted dimensions.
+        Example:
+            x.transpose(1, 0)  # swaps first two axes
+        """
+        if axes is None:
+            data_t = self.data.T
+        elif isinstance(axes, (tuple, list)):
+            data_t = self.data.transpose(*axes)
+        elif isinstance(axes, int):
+            # Allow single integer (for 1D swap)
+            data_t = np.swapaxes(self.data, 0, axes)
+        else:
+            raise TypeError(f"Invalid axes argument: {axes}")
+            
+        return Tensor(data_t, requires_grad=self.requires_grad)
+    
+    @property
+    def T(self):
+        """Shortcut for transpose() with no arguments."""
+        return self.transpose()
         
     # convenience ops (wrap scalars to Tensor without auto requires_grad)
     def _wrap(self, other):
@@ -283,15 +309,20 @@ class Tensor:
 def grad_check(func, inputs, eps=1e-3, tol=1e-2):
     # Ensure no stale grads
     for x in inputs:
+        x.requires_grad = True
         x.zero_grad(recursive=False)
         
     out = func(*inputs)
+    
     # zero grads again to be safe (if func used some intermediate tensors)
     for x in inputs:
         x.zero_grad(recursive=False)
         
     out.backward()
-    analytic_grads = [x.grad.copy() for x in inputs]
+    analytic_grads = [
+        x.grad.copy() if x.grad is not None else np.zeros_like(x.data)
+        for x in inputs
+    ]
 
     num_grads = []
     for i, x in enumerate(inputs):
@@ -331,46 +362,49 @@ def test_all_grads():
     # --- 1. Add ---
     x = Tensor(np.random.randn(3, 3), requires_grad=True)
     y = Tensor(np.random.randn(3, 3), requires_grad=True)
-    grad_check(lambda a, b: (a + b).sum(), [x, y])
+    grad_check(lambda a, b: a + b, [x, y])
 
     # --- 2. Sub ---
-    grad_check(lambda a, b: (a - b).sum(), [x, y])
-
+    grad_check(lambda a, b: a - b, [x, y])
+    
     # --- 3. Mul ---
-    grad_check(lambda a, b: (a * b).sum(), [x, y])
+    grad_check(lambda a, b: a * b, [x, y])
 
     # --- 4. Div ---
-    grad_check(lambda a, b: (a / (b + 2)).sum(), [x, y])  
+    grad_check(lambda a, b: a / (b + 2), [x, y])  
 
     # --- 5. Pow ---
     # make base positive and bounded away from zero, exponent also shifted
-    grad_check(lambda a, b: ((a * 0.5 + 2.0) ** (b * 0.5 + 2.0)).sum(), [x, y])
+    grad_check(lambda a, b: (a * 0.5 + 2.0) ** (b * 0.5 + 2.0), [x, y])
 
     # --- 6. Tanh ---
-    grad_check(lambda a: a.tanh().sum(), [x])
+    grad_check(lambda a: a.tanh(), [x])
 
     # --- 7. Log ---
-    grad_check(lambda a: (a * 0.5 + 1.0).log().sum(), [x])  # avoid log(0)
+    grad_check(lambda a: (a * 0.5 + 1.0).log(), [x])  # avoid log(0)
 
     # --- 8. Sqrt ---
-    grad_check(lambda a: ((a * 0.5 + 2).sqrt()).sum(), [x])
+    grad_check(lambda a: (a * 0.5 + 2).sqrt(), [x])
 
     # --- 9. Exp ---
-    grad_check(lambda a: a.exp().sum(), [x])
+    grad_check(lambda a: a.exp(), [x])
 
     # --- 10. Softmax ---
-    grad_check(lambda a: a.softmax().sum(), [x])
+    grad_check(lambda a: a.softmax(), [x])
 
     # --- 11. MatMul ---
     A = Tensor(np.random.randn(2, 3), requires_grad=True)
     B = Tensor(np.random.randn(3, 4), requires_grad=True)
-    grad_check(lambda a, b: a.matmul(b).sum(), [A, B])
+    grad_check(lambda a, b: a.matmul(b), [A, B])
 
     # --- 12. ReLU ---
-    grad_check(lambda a: a.relu().sum(), [x])
+    grad_check(lambda a: a.relu(), [x])
 
     # --- 13. Sum ---
-    grad_check(lambda a: a.sum(), [x])
+    grad_check(lambda a: a.sum(axis=0), [x])
+    
+    # --- 14. Mean ---
+    grad_check(lambda a: a.mean(axis=0), [x])
 
     print("\nAll gradient checks passed successfully!")
  
@@ -425,10 +459,8 @@ if __name__ == "__main__":
     
     test_broadcast_grad()
     
-    x = Tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
-    y = x.mean()
-    y.backward()
-
-    print("x.grad =")
-    print(x.grad)
+    x = Tensor(np.random.randn(3, 5))
+    print(x.shape)        # (3,5)
+    print(x.T.shape)      # (5,3)
+    print(x.transpose((1, 0)).shape)  # (5,3)
     
