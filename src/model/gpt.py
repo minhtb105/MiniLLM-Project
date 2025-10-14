@@ -51,6 +51,31 @@ class CausalLM(Module):
     def forward(self, input_ids: np.ndarray, past_key_values=None, use_cache=False) -> Tensor:
         raise NotImplementedError
     
+    def zero_grad(self):
+        for _, p in self.parameters():
+            if hasattr(p, "zero_grad"):
+                p.zero_grad(recursive=False)                
+    
+    def backward(self, loss):
+        """
+        Perform backward pass on the loss.
+        Supports both Tensor and float loss.
+        """
+        import sys
+        
+        Tensor = None
+        if "src.core.tensor" in sys.modules:
+            Tensor = sys.modules["src.core.tensor"].Tensor
+        elif "__main__" in sys.modules:
+            Tensor = sys.modules["__main__"].Tensor
+        
+        if isinstance(loss, Tensor):
+            loss.backward()
+        else:
+            # convert scalar numpy.float32 or float to Tensor
+            loss_t = Tensor(np.array(loss, dtype=np.float32))
+            loss_t.backward()
+    
     def generate(
         self,
         input_ids: np.ndarray,
