@@ -217,7 +217,7 @@ class GPTModel(CausalLM):
         if self.tie_word_embeddings:
             # tied weights: logits = x @ token_emb.weight.T
             W = self.token_emb._parameters["weight"]  # Tensor(vocab_size, d_model)
-            logits = x.matmul(W.transpose(1,0))  # x (B,L,D) @ (D, V) -> (B,L,V)
+            logits = x.matmul(W.transpose((1,0)))  # x (B,L,D) @ (D, V) -> (B,L,V)
         else:
             logits = self.lm_head(x)  # Linear layer returns Tensor
 
